@@ -28,26 +28,31 @@ pub fn build(b: *std.Build) void {
 
     if (shared) lib.defineCMacro("_GLFW_BUILD_DLL", "1");
 
-    lib.installHeadersDirectory("include/GLFW", "GLFW");
+    lib.installHeadersDirectory(b.path("include/GLFW"), "GLFW", .{});
     // GLFW headers depend on these headers, so they must be distributed too.
-    const vulkan_headers_dep = b.dependency("vulkan_headers", .{
+    if (b.lazyDependency("vulkan_headers", .{
         .target = target,
         .optimize = optimize,
-    });
-    lib.installLibraryHeaders(vulkan_headers_dep.artifact("vulkan-headers"));
+    })) |vulkan_headers_dep| {
+        lib.installLibraryHeaders(vulkan_headers_dep.artifact("vulkan-headers"));
+    }
+
     if (target.result.os.tag == .linux) {
-        const x11_headers_dep = b.dependency("x11_headers", .{
+        if (b.lazyDependency("x11_headers", .{
             .target = target,
             .optimize = optimize,
-        });
-        const wayland_headers_dep = b.dependency("wayland_headers", .{
+        })) |x11_headers_dep| {
+            lib.linkLibrary(x11_headers_dep.artifact("x11-headers"));
+            lib.installLibraryHeaders(x11_headers_dep.artifact("x11-headers"));
+        }
+
+        if (b.lazyDependency("wayland_headers", .{
             .target = target,
             .optimize = optimize,
-        });
-        lib.linkLibrary(x11_headers_dep.artifact("x11-headers"));
-        lib.linkLibrary(wayland_headers_dep.artifact("wayland-headers"));
-        lib.installLibraryHeaders(x11_headers_dep.artifact("x11-headers"));
-        lib.installLibraryHeaders(wayland_headers_dep.artifact("wayland-headers"));
+        })) |wayland_headers_dep| {
+            lib.linkLibrary(wayland_headers_dep.artifact("wayland-headers"));
+            lib.installLibraryHeaders(wayland_headers_dep.artifact("wayland-headers"));
+        }
     }
 
     if (target.result.isDarwin()) {
