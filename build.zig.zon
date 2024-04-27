@@ -16,7 +16,6 @@
         .xcode_frameworks = .{
             .url = "https://github.com/corendos/xcode-frameworks/archive/cc845da0fd431275a8c6491d1a73b1a2f7f87d9f.tar.gz",
             .hash = "1220952bf2759bf72187441dead4dfcebce9ff0d6e1cbb4a68355a11d1f7287e0683",
-            .lazy = true,
         },
         .vulkan_headers = .{
             .url = "https://github.com/corendos/vulkan-headers/archive/96950e6830512006a8546ac07dd625cc9e1adc50.tar.gz",
