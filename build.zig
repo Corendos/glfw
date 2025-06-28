@@ -13,22 +13,126 @@ pub fn build(b: *std.Build) void {
     const use_gles = b.option(bool, "gles", "Build with GLES; not supported on MacOS") orelse false;
     const use_metal = b.option(bool, "metal", "Build with Metal; only supported on MacOS") orelse true;
 
-    const lib = std.Build.Step.Compile.create(b, .{
-        .name = "glfw",
-        .kind = .lib,
-        .linkage = if (shared) .dynamic else .static,
-        .root_module = .{
-            .target = target,
-            .optimize = optimize,
-        },
+    const module = b.addModule("glfw", .{
+        .optimize = optimize,
+        .target = target,
+        .link_libc = true,
     });
-    lib.addIncludePath(.{ .path = "include" });
-    lib.linkLibC();
-    addPaths(&lib.root_module);
 
-    if (shared) lib.defineCMacro("_GLFW_BUILD_DLL", "1");
-
+    const lib = b.addLibrary(.{
+        .name = "glfw",
+        .linkage = if (shared) .dynamic else .static,
+        .root_module = module,
+    });
     lib.installHeadersDirectory(b.path("include/GLFW"), "GLFW", .{});
+
+    module.addIncludePath(b.path("include"));
+
+    if (shared) module.addCMacro("_GLFW_BUILD_DLL", "1");
+
+    if (target.result.os.tag.isDarwin()) {
+        // MacOS: this must be defined for macOS 13.3 and older.
+        module.addCMacro("__kernel_ptr_semantics", "");
+    }
+
+    const include_src_flag = "-Isrc";
+
+    switch (target.result.os.tag) {
+        .windows => {
+            module.linkSystemLibrary("gdi32", .{});
+            module.linkSystemLibrary("user32", .{});
+            module.linkSystemLibrary("shell32", .{});
+
+            if (use_opengl) {
+                module.linkSystemLibrary("opengl32", .{});
+            }
+
+            if (use_gles) {
+                module.linkSystemLibrary("GLESv3", .{});
+            }
+
+            const flags = [_][]const u8{ "-D_GLFW_WIN32", include_src_flag };
+            module.addCSourceFiles(.{
+                .files = &base_sources,
+                .flags = &flags,
+            });
+            module.addCSourceFiles(.{
+                .files = &windows_sources,
+                .flags = &flags,
+            });
+        },
+        .macos => {
+            const xcode_frameworks_deps = b.dependency("xcode_frameworks", .{ .target = target, .optimize = optimize });
+            module.addSystemFrameworkPath(xcode_frameworks_deps.path("Frameworks"));
+            module.addSystemIncludePath(xcode_frameworks_deps.path("include"));
+            module.addLibraryPath(xcode_frameworks_deps.path("lib"));
+
+            // Transitive dependencies, explicit linkage of these works around
+            // ziglang/zig#17130
+            module.linkFramework("CFNetwork", .{});
+            module.linkFramework("ApplicationServices", .{});
+            module.linkFramework("ColorSync", .{});
+            module.linkFramework("CoreText", .{});
+            module.linkFramework("ImageIO", .{});
+
+            // Direct dependencies
+            module.linkSystemLibrary("objc", .{});
+            module.linkFramework("IOKit", .{});
+            module.linkFramework("CoreFoundation", .{});
+            module.linkFramework("AppKit", .{});
+            module.linkFramework("CoreServices", .{});
+            module.linkFramework("CoreGraphics", .{});
+            module.linkFramework("Foundation", .{});
+
+            if (use_metal) {
+                module.linkFramework("Metal", .{});
+            }
+
+            if (use_opengl) {
+                module.linkFramework("OpenGL", .{});
+            }
+
+            const flags = [_][]const u8{ "-D_GLFW_COCOA", include_src_flag };
+            module.addCSourceFiles(.{
+                .files = &base_sources,
+                .flags = &flags,
+            });
+            module.addCSourceFiles(.{
+                .files = &macos_sources,
+                .flags = &flags,
+            });
+        },
+
+        // everything that isn't windows or mac is linux :P
+        else => {
+            var sources = std.BoundedArray([]const u8, 64).init(0) catch unreachable;
+            var flags = std.BoundedArray([]const u8, 16).init(0) catch unreachable;
+
+            sources.appendSlice(&base_sources) catch unreachable;
+            sources.appendSlice(&linux_sources) catch unreachable;
+
+            if (use_x11) {
+                sources.appendSlice(&linux_x11_sources) catch unreachable;
+                flags.append("-D_GLFW_X11") catch unreachable;
+            }
+
+            if (use_wl) {
+                module.addCMacro("WL_MARSHAL_FLAG_DESTROY", "1");
+
+                sources.appendSlice(&linux_wl_sources) catch unreachable;
+                flags.append("-D_GLFW_WAYLAND") catch unreachable;
+                flags.append("-Wno-implicit-function-declaration") catch unreachable;
+            }
+
+            flags.append(include_src_flag) catch unreachable;
+
+            module.addCSourceFiles(.{
+                .files = sources.slice(),
+                .flags = flags.slice(),
+            });
+        },
+    }
+
     // GLFW headers depend on these headers, so they must be distributed too.
     if (b.lazyDependency("vulkan_headers", .{
         .target = target,
@@ -50,113 +154,13 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         })) |wayland_headers_dep| {
-            lib.linkLibrary(wayland_headers_dep.artifact("wayland-headers"));
-            lib.installLibraryHeaders(wayland_headers_dep.artifact("wayland-headers"));
+            lib.addIncludePath(wayland_headers_dep.path("wayland"));
+            lib.addIncludePath(wayland_headers_dep.path("wayland-protocols"));
+            lib.addIncludePath(wayland_headers_dep.path("libdecor"));
         }
     }
 
-    if (target.result.isDarwin()) {
-        // MacOS: this must be defined for macOS 13.3 and older.
-        lib.defineCMacro("__kernel_ptr_semantics", "");
-    }
-
-    const include_src_flag = "-Isrc";
-
-    switch (target.result.os.tag) {
-        .windows => {
-            lib.linkSystemLibrary("gdi32");
-            lib.linkSystemLibrary("user32");
-            lib.linkSystemLibrary("shell32");
-
-            if (use_opengl) {
-                lib.linkSystemLibrary("opengl32");
-            }
-
-            if (use_gles) {
-                lib.linkSystemLibrary("GLESv3");
-            }
-
-            const flags = [_][]const u8{ "-D_GLFW_WIN32", include_src_flag };
-            lib.addCSourceFiles(.{
-                .files = &base_sources,
-                .flags = &flags,
-            });
-            lib.addCSourceFiles(.{
-                .files = &windows_sources,
-                .flags = &flags,
-            });
-        },
-        .macos => {
-            // Transitive dependencies, explicit linkage of these works around
-            // ziglang/zig#17130
-            lib.linkFramework("CFNetwork");
-            lib.linkFramework("ApplicationServices");
-            lib.linkFramework("ColorSync");
-            lib.linkFramework("CoreText");
-            lib.linkFramework("ImageIO");
-
-            // Direct dependencies
-            lib.linkSystemLibrary("objc");
-            lib.linkFramework("IOKit");
-            lib.linkFramework("CoreFoundation");
-            lib.linkFramework("AppKit");
-            lib.linkFramework("CoreServices");
-            lib.linkFramework("CoreGraphics");
-            lib.linkFramework("Foundation");
-
-            if (use_metal) {
-                lib.linkFramework("Metal");
-            }
-
-            if (use_opengl) {
-                lib.linkFramework("OpenGL");
-            }
-
-            const flags = [_][]const u8{ "-D_GLFW_COCOA", include_src_flag };
-            lib.addCSourceFiles(.{
-                .files = &base_sources,
-                .flags = &flags,
-            });
-            lib.addCSourceFiles(.{
-                .files = &macos_sources,
-                .flags = &flags,
-            });
-        },
-
-        // everything that isn't windows or mac is linux :P
-        else => {
-            var sources = std.BoundedArray([]const u8, 64).init(0) catch unreachable;
-            var flags = std.BoundedArray([]const u8, 16).init(0) catch unreachable;
-
-            sources.appendSlice(&base_sources) catch unreachable;
-            sources.appendSlice(&linux_sources) catch unreachable;
-
-            if (use_x11) {
-                sources.appendSlice(&linux_x11_sources) catch unreachable;
-                flags.append("-D_GLFW_X11") catch unreachable;
-            }
-
-            if (use_wl) {
-                lib.defineCMacro("WL_MARSHAL_FLAG_DESTROY", "1");
-
-                sources.appendSlice(&linux_wl_sources) catch unreachable;
-                flags.append("-D_GLFW_WAYLAND") catch unreachable;
-                flags.append("-Wno-implicit-function-declaration") catch unreachable;
-            }
-
-            flags.append(include_src_flag) catch unreachable;
-
-            lib.addCSourceFiles(.{
-                .files = sources.slice(),
-                .flags = flags.slice(),
-            });
-        },
-    }
     b.installArtifact(lib);
-}
-
-pub fn addPaths(mod: *std.Build.Module) void {
-    if (mod.resolved_target.?.result.os.tag == .macos) @import("xcode_frameworks").addPaths(mod);
 }
 
 const base_sources = [_][]const u8{

@@ -1,5 +1,6 @@
 .{
-    .name = "glfw",
+    .name = .glfw,
+    .fingerprint = 0x3bbe0a5c2386d8cb,
     .version = "0.0.0",
     .paths = .{
         "include/",
@@ -14,21 +15,21 @@
     },
     .dependencies = .{
         .xcode_frameworks = .{
-            .url = "https://github.com/corendos/xcode-frameworks/archive/cc845da0fd431275a8c6491d1a73b1a2f7f87d9f.tar.gz",
-            .hash = "1220952bf2759bf72187441dead4dfcebce9ff0d6e1cbb4a68355a11d1f7287e0683",
+            .url = "https://github.com/corendos/xcode-frameworks/archive/8a1cfb373587ea4c9bb1468b7c986462d8d4e10e.tar.gz",
+            .hash = "N-V-__8AALShqgXkvqYU6f__FrA22SMWmi2TXCJjNTO1m8XJ",
         },
         .vulkan_headers = .{
-            .url = "https://github.com/corendos/vulkan-headers/archive/96950e6830512006a8546ac07dd625cc9e1adc50.tar.gz",
-            .hash = "122004bfd4c519dadfb8e6281a42fc34fd1aa15aea654ea8a492839046f9894fa2cf",
+            .url = "https://github.com/corendos/vulkan-headers/archive/7ab62a0d8f9d1d830e75a872093cc8e5de7d8572.tar.gz",
+            .hash = "N-V-__8AAHQGzwD8SIRU2IlLBJAjKdqmuMjDUg0Q-n0Lnemv",
         },
         .wayland_headers = .{
-            .url = "https://github.com/corendos/wayland-headers/archive/c4751e8a1c9f91151ffa9b60b71feac9c63bcfa4.tar.gz",
-            .hash = "1220b3164434d2ec9db146a40bf3a30f490590d68fa8529776a3138074f0da2c11ca",
+            .url = "https://github.com/corendos/wayland-headers/archive/7c53e7483c3cfb5c6780ae542c9f5cfa712a826a.tar.gz",
+            .hash = "N-V-__8AAJfbCQBWPD1WA6AuYSk8LAIj4Bo_KY-2Br8NEIKT",
             .lazy = true,
         },
         .x11_headers = .{
-            .url = "https://github.com/corendos/x11-headers/archive/e2007b51df55315b7fd3a69cf52f4134c83e47d5.tar.gz",
-            .hash = "122089c326186c84aa2fd034b16abc38f3ebf4862d9ae106dc1847ac44f557b36465",
+            .url = "https://github.com/corendos/x11-headers/archive/9a8b4a4b90b35db4e57687ecc1063e3afc84ed13.tar.gz",
+            .hash = "N-V-__8AAJXnQQBngN_ieagqy17gq_xRMGWHpHA0GMLr7xqf",
             .lazy = true,
         },
     },
